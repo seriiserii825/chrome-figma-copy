@@ -33,11 +33,14 @@ No content script at all — everything happens in the popup + a service worker.
   dotfiles included, no `web_accessible_resources` needed for same-origin
   reads. `.env` is gitignored and kept encrypted at rest as `.env.gpg`
   (`.gpgrc` workflow) — it only exists in plaintext on machines where it's
-  been decrypted. If found, the token is validated immediately against
-  `GET /v1/me` (via `background.js`'s `validateFigmaToken`); a 403 there
-  means invalid/expired and surfaces as a status error rather than silently
-  failing later. If no `.env` is present, falls back to whatever was saved
-  manually through the token field + "Сохранить".
+  been decrypted. If found, the token is loaded straight into
+  `chrome.storage.local`, no proactive validation: the PAT is minted with
+  `file_content:read` only, and there's no cheap endpoint under that scope
+  to "ping" (`GET /v1/me` needs `current_user:read` and would 403 a
+  perfectly valid token). Invalid/expired is instead surfaced from the real
+  `fetchFigmaNodes` call in the main flow, which checks for HTTP 403. If no
+  `.env` is present, falls back to whatever was saved manually through the
+  token field + "Сохранить".
 - `resolveSource()` figures out which Figma node to fetch:
   1. Tries `navigator.clipboard.readText()` for a Figma "Copy link to
      selection" URL (`Ctrl+Alt+L` / `⌘⌥L` in Figma) — this is the reliable
@@ -52,6 +55,12 @@ No content script at all — everything happens in the popup + a service worker.
   group's texts top-to-bottom, then orders the groups themselves in reading
   order: rows clustered by vertical bbox overlap, left-to-right within a row.
 - Result is shown in the textarea and written to the clipboard.
+- `init().then(runCopy)` at the bottom of the file: the whole flow (load
+  token → resolve source → fetch → reorder → copy) runs automatically the
+  instant the popup opens, no click required. `runBtn` still calls the same
+  `runCopy()` for a manual retry. This is what makes `Alt+C`
+  (`commands._execute_action` in the manifest) a single press-and-done
+  shortcut: it opens the popup, which immediately does the rest.
 
 ### Background (`background.js`)
 Only job: proxy the Figma REST API call

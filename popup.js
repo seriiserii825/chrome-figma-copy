@@ -37,21 +37,14 @@ async function init() {
   }
 
   if (env.found && env.token) {
-    setStatus('Проверяю токен из .env...');
-    const check = await chrome.runtime.sendMessage({ type: 'validateFigmaToken', token: env.token });
-    if (check && check.ok) {
-      await chrome.storage.local.set({ figmaToken: env.token });
-      const who = (check.data && (check.data.email || check.data.handle)) || 'ok';
-      tokenInput.placeholder = `Токен из .env ✓ (${who})`;
-      setStatus('Токен из .env валиден.');
-    } else if (check && check.status === 403) {
-      setStatus(
-        'Токен в .env недействителен или просрочен. Сгенерируй новый в Figma → Settings → Security, обнови .env и зашифруй заново.',
-        true
-      );
-    } else {
-      setStatus('Не удалось проверить токен из .env: ' + (check && check.error), true);
-    }
+    // Не валидируем токен здесь: PAT выпускается со scope file_content:read
+    // only, а любая проверка вроде GET /v1/me требует current_user:read —
+    // всегда вернёт 403 даже для рабочего токена. Реальная проверка
+    // (тем же scope, что и токен) происходит при фактическом запросе файла
+    // в основном потоке — там и всплывёт "недействителен/просрочен".
+    await chrome.storage.local.set({ figmaToken: env.token });
+    tokenInput.placeholder = 'Токен загружен из .env ✓';
+    setStatus('Токен загружен из .env.');
     return;
   }
 
@@ -61,7 +54,6 @@ async function init() {
     tokenInput.placeholder = 'Токен сохранён ✓ (введи новый, чтобы заменить)';
   }
 }
-init();
 
 saveTokenBtn.addEventListener('click', async () => {
   const value = tokenInput.value.trim();
@@ -204,7 +196,11 @@ copyBtn.addEventListener('click', async () => {
   }
 });
 
-runBtn.addEventListener('click', async () => {
+// Runs on every popup open (see bottom of file) so Alt+C is a single
+// press-and-done action — the user never has to click anything inside
+// the popup. The button stays as a manual retry, e.g. after fixing the
+// token or re-copying the Figma selection link.
+async function runCopy() {
   runBtn.disabled = true;
   outputEl.value = '';
   copyBtn.disabled = true;
@@ -268,4 +264,8 @@ runBtn.addEventListener('click', async () => {
   } finally {
     runBtn.disabled = false;
   }
-});
+}
+
+runBtn.addEventListener('click', runCopy);
+
+init().then(runCopy);

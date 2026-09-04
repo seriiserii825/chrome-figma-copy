@@ -5,11 +5,31 @@
   "description": "Copies text from selected Figma layers in the visual page order (title then text, left to right, top to bottom)",
   "permissions": ["storage", "clipboardRead", "clipboardWrite", "activeTab", "tabs"],
   "host_permissions": ["https://api.figma.com/*"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Figma Copy — Page Order"
+    "default_title": "Figma Copy — Page Order",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "background": {
     "service_worker": "background.js"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+C"
+      },
+      "description": "Open popup and copy Figma text in page order"
+    }
   }
 }
