@@ -10,7 +10,52 @@ function setStatus(text, isError = false) {
   statusEl.classList.toggle('error', isError);
 }
 
+// The .env file lives inside this extension's own folder (gitignored,
+// decrypted locally from .env.gpg by the user outside of Chrome) so it's
+// readable as a bundled resource via chrome.runtime.getURL, same as any
+// other extension file.
+async function loadEnvToken() {
+  try {
+    const res = await fetch(chrome.runtime.getURL('.env'));
+    if (!res.ok) return { found: false };
+    const text = await res.text();
+    const match = text.match(/^\s*FIGMA_TOKEN\s*=\s*(.+?)\s*$/m);
+    if (!match) return { found: true, token: null };
+    const token = match[1].trim().replace(/^['"]|['"]$/g, '');
+    return { found: true, token };
+  } catch {
+    return { found: false };
+  }
+}
+
 async function init() {
+  const env = await loadEnvToken();
+
+  if (env.found && !env.token) {
+    setStatus('.env найден, но в нём нет FIGMA_TOKEN.', true);
+    return;
+  }
+
+  if (env.found && env.token) {
+    setStatus('Проверяю токен из .env...');
+    const check = await chrome.runtime.sendMessage({ type: 'validateFigmaToken', token: env.token });
+    if (check && check.ok) {
+      await chrome.storage.local.set({ figmaToken: env.token });
+      const who = (check.data && (check.data.email || check.data.handle)) || 'ok';
+      tokenInput.placeholder = `Токен из .env ✓ (${who})`;
+      setStatus('Токен из .env валиден.');
+    } else if (check && check.status === 403) {
+      setStatus(
+        'Токен в .env недействителен или просрочен. Сгенерируй новый в Figma → Settings → Security, обнови .env и зашифруй заново.',
+        true
+      );
+    } else {
+      setStatus('Не удалось проверить токен из .env: ' + (check && check.error), true);
+    }
+    return;
+  }
+
+  // No .env on this machine — fall back to whatever was saved manually.
   const { figmaToken } = await chrome.storage.local.get('figmaToken');
   if (figmaToken) {
     tokenInput.placeholder = 'Токен сохранён ✓ (введи новый, чтобы заменить)';
@@ -189,7 +234,11 @@ runBtn.addEventListener('click', async () => {
     });
 
     if (!resp || !resp.ok) {
-      setStatus('Ошибка API: ' + (resp && resp.error), true);
+      if (resp && resp.status === 403) {
+        setStatus('Токен недействителен или просрочен. Сгенерируй новый в Figma → Settings → Security.', true);
+      } else {
+        setStatus('Ошибка API: ' + (resp && resp.error), true);
+      }
       return;
     }
 

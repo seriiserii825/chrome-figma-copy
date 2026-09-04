@@ -1,23 +1,29 @@
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type !== 'fetchFigmaNodes') return false;
-
-  (async () => {
-    try {
-      const url = `https://api.figma.com/v1/files/${encodeURIComponent(msg.fileKey)}/nodes?ids=${encodeURIComponent(msg.nodeId)}`;
-      const res = await fetch(url, { headers: { 'X-Figma-Token': msg.token } });
-
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        sendResponse({ ok: false, error: `Figma API ${res.status}: ${body || res.statusText}` });
-        return;
-      }
-
-      const data = await res.json();
-      sendResponse({ ok: true, data });
-    } catch (err) {
-      sendResponse({ ok: false, error: String((err && err.message) || err) });
+async function figmaFetch(path, token) {
+  try {
+    const res = await fetch(`https://api.figma.com${path}`, { headers: { 'X-Figma-Token': token } });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      return { ok: false, status: res.status, error: `Figma API ${res.status}: ${body || res.statusText}` };
     }
-  })();
+    return { ok: true, data: await res.json() };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+}
 
-  return true; // keep the message channel open for the async response
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'fetchFigmaNodes') {
+    figmaFetch(
+      `/v1/files/${encodeURIComponent(msg.fileKey)}/nodes?ids=${encodeURIComponent(msg.nodeId)}`,
+      msg.token
+    ).then(sendResponse);
+    return true; // keep the message channel open for the async response
+  }
+
+  if (msg.type === 'validateFigmaToken') {
+    figmaFetch('/v1/me', msg.token).then(sendResponse);
+    return true;
+  }
+
+  return false;
 });

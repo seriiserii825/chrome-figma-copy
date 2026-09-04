@@ -27,6 +27,17 @@ No content script at all — everything happens in the popup + a service worker.
 
 ### Popup (`popup.html` + `popup.js`)
 - Personal Access Token is entered once and stored in `chrome.storage.local`.
+- On open, `init()` first tries to auto-load the token from a bundled `.env`
+  file (`FIGMA_TOKEN=...`) via `fetch(chrome.runtime.getURL('.env'))` — this
+  works because Chrome serves an unpacked extension's own directory as-is,
+  dotfiles included, no `web_accessible_resources` needed for same-origin
+  reads. `.env` is gitignored and kept encrypted at rest as `.env.gpg`
+  (`.gpgrc` workflow) — it only exists in plaintext on machines where it's
+  been decrypted. If found, the token is validated immediately against
+  `GET /v1/me` (via `background.js`'s `validateFigmaToken`); a 403 there
+  means invalid/expired and surfaces as a status error rather than silently
+  failing later. If no `.env` is present, falls back to whatever was saved
+  manually through the token field + "Сохранить".
 - `resolveSource()` figures out which Figma node to fetch:
   1. Tries `navigator.clipboard.readText()` for a Figma "Copy link to
      selection" URL (`Ctrl+Alt+L` / `⌘⌥L` in Figma) — this is the reliable
