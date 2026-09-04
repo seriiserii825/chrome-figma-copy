@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Figma Copy — Page Order",
+  "version": "1.0",
+  "description": "Copies text from selected Figma layers in the visual page order (title then text, left to right, top to bottom)",
+  "permissions": ["storage", "clipboardRead", "clipboardWrite", "activeTab", "tabs"],
+  "host_permissions": ["https://api.figma.com/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Figma Copy — Page Order"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

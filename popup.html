@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<title>Figma Copy — Page Order</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    width: 360px;
+    margin: 0;
+    padding: 14px;
+    font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1a1a1a;
+    background: #fff;
+  }
+  h1 {
+    font-size: 14px;
+    margin: 0 0 10px;
+  }
+  .field { margin-bottom: 10px; }
+  label {
+    display: block;
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 4px;
+  }
+  input[type="password"], input[type="text"] {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  .row { display: flex; gap: 6px; }
+  .row input { flex: 1; }
+  button {
+    padding: 7px 10px;
+    border: none;
+    border-radius: 6px;
+    background: #f24e1e;
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  button.secondary {
+    background: #f0f0f0;
+    color: #1a1a1a;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  #runBtn { width: 100%; margin-top: 4px; padding: 9px; font-size: 13px; }
+  #status {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #666;
+    min-height: 14px;
+    white-space: pre-wrap;
+  }
+  #status.error { color: #d1242f; }
+  textarea {
+    width: 100%;
+    height: 160px;
+    margin-top: 8px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font: 12px/1.4 ui-monospace, monospace;
+    resize: vertical;
+  }
+  .hint {
+    font-size: 11px;
+    color: #999;
+    margin-top: 8px;
+  }
+  .hint code {
+    background: #f5f5f5;
+    padding: 1px 4px;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+  <h1>Figma Copy — Page Order</h1>
+
+  <div class="field">
+    <label for="tokenInput">Personal Access Token</label>
+    <div class="row">
+      <input type="password" id="tokenInput" placeholder="figd_..." autocomplete="off" />
+      <button id="saveTokenBtn" class="secondary">Сохранить</button>
+    </div>
+  </div>
+
+  <button id="runBtn">Скопировать в порядке страницы</button>
+
+  <div id="status"></div>
+
+  <textarea id="output" readonly placeholder="Результат появится здесь..."></textarea>
+  <button id="copyBtn" class="secondary" style="margin-top: 6px;" disabled>Скопировать</button>
+
+  <div class="hint">
+    В Figma выдели нужный фрейм/группу и нажми <code>Ctrl+Alt+L</code>
+    (<code>⌘⌥L</code> на Mac) — «Copy link to selection». Потом жми кнопку выше.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
