@@ -1,9 +1,12 @@
 const tokenInput = document.getElementById('tokenInput');
 const saveTokenBtn = document.getElementById('saveTokenBtn');
 const runBtn = document.getElementById('runBtn');
+const fontsBtn = document.getElementById('fontsBtn');
+const colorsBtn = document.getElementById('colorsBtn');
 const statusEl = document.getElementById('status');
 const outputEl = document.getElementById('output');
 const copyBtn = document.getElementById('copyBtn');
+const allButtons = [runBtn, fontsBtn, colorsBtn];
 
 function setStatus(text, isError = false) {
   statusEl.textContent = text;
@@ -184,6 +187,174 @@ function reorderTexts(texts) {
   return ordered;
 }
 
+// Collects every visible node (any type) under `node`, for passes that need
+// more than just TEXT nodes (font/color extraction). Same hidden-ancestor
+// rule as `walk()`.
+function collectAllNodes(node, out, hidden = false) {
+  const nodeHidden = hidden || node.visible === false;
+  if (!nodeHidden) out.push(node);
+  if (Array.isArray(node.children)) {
+    for (const child of node.children) collectAllNodes(child, out, nodeHidden);
+  }
+}
+
+function extractFonts(nodes) {
+  const byKey = new Map();
+  for (const n of nodes) {
+    if (n.type !== 'TEXT' || !n.style || !n.style.fontFamily) continue;
+    const { fontFamily, fontWeight, fontSize } = n.style;
+    const key = `${fontFamily}__${fontWeight}`;
+    if (!byKey.has(key)) byKey.set(key, { fontFamily, fontWeight, sizes: new Set() });
+    if (typeof fontSize === 'number') byKey.get(key).sizes.add(fontSize);
+  }
+  return [...byKey.values()].sort(
+    (a, b) => a.fontFamily.localeCompare(b.fontFamily) || a.fontWeight - b.fontWeight
+  );
+}
+
+function formatFonts(fonts) {
+  return fonts
+    .map((f) => {
+      const sizes = [...f.sizes].sort((a, b) => a - b);
+      const sizesStr = sizes.length ? ` (${sizes.map((s) => s + 'px').join(', ')})` : '';
+      return `${f.fontFamily} ${f.fontWeight}${sizesStr}`;
+    })
+    .join('\n');
+}
+
+function colorToHex(color, opacity) {
+  const alpha = (typeof opacity === 'number' ? opacity : 1) * (typeof color.a === 'number' ? color.a : 1);
+  const toHex = (v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0');
+  const hex = `#${toHex(color.r)}${toHex(color.g)}${toHex(color.b)}`;
+  return alpha < 0.999 ? `${hex}${toHex(alpha)}` : hex;
+}
+
+// Unique solid fill/stroke colors used across the selection. Figma has two
+// separate ways to name a color, and a node can carry either (or neither):
+//  - Variables: bound per-paint via `paint.boundVariables.color.id`, needs a
+//    dedicated (Enterprise-only) API call to resolve names — see below.
+//  - Local Styles (the classic "color styles" feature): bound per-node via
+//    `node.styles.fill` / `node.styles.stroke`, and resolved for free — the
+//    id -> {name} map for every style used in the selection comes back
+//    attached to the same `/nodes` response that fetched the tree, no extra
+//    scope or request needed.
+// A paint's own literal `color` is always present as the fallback hex either
+// way, so extraction never depends on either naming path succeeding.
+function extractColors(nodes) {
+  const byKey = new Map();
+  const addPaint = (p, styleId) => {
+    if (p.type !== 'SOLID' || p.visible === false || !p.color) return;
+    const hex = colorToHex(p.color, p.opacity);
+    const variableId = p.boundVariables && p.boundVariables.color && p.boundVariables.color.id;
+    const key = variableId ? `var:${variableId}` : styleId ? `style:${styleId}` : `hex:${hex}`;
+    if (!byKey.has(key)) byKey.set(key, { hex, variableId: variableId || null, styleId: styleId || null });
+  };
+  for (const n of nodes) {
+    const fillStyleId = n.styles && n.styles.fill;
+    const strokeStyleId = n.styles && n.styles.stroke;
+    if (Array.isArray(n.fills)) for (const p of n.fills) addPaint(p, fillStyleId);
+    if (Array.isArray(n.strokes)) for (const p of n.strokes) addPaint(p, strokeStyleId);
+  }
+  return [...byKey.values()];
+}
+
+function cssVarName(variableName) {
+  return variableName.trim().replace(/[\s/]+/g, '-');
+}
+
+// A color tied to a variable or a local style is always rendered as
+// `var(--Name, #hex)`, even when the variable's real name couldn't be
+// fetched (e.g. missing `file_variables:read` scope) — it then falls back to
+// the raw variable id rather than silently collapsing to a bare hex, so
+// tokenized colors never look indistinguishable from untokenized ones.
+function formatColors(colors, variableNames, stylesMap) {
+  return colors
+    .map(({ hex, variableId, styleId }) => {
+      if (variableId) {
+        const name = variableNames.get(variableId) || variableId.replace(/^VariableID:/, '');
+        return `var(--${cssVarName(name)}, ${hex})`;
+      }
+      if (styleId && stylesMap[styleId] && stylesMap[styleId].name) {
+        return `var(--${cssVarName(stylesMap[styleId].name)}, ${hex})`;
+      }
+      return hex;
+    })
+    .sort()
+    .join('\n');
+}
+
+// Resolves Figma variable ids to their names via the file's local variables.
+// This needs a `file_variables:read` scope the extension's PAT may not have,
+// and the endpoint itself may be plan-gated (Variables REST API is not
+// available on every plan) — callers should surface `ok: false` to the user
+// rather than hide it, since it explains why names show as raw ids.
+async function resolveVariableNames(fileKey, token, variableIds) {
+  const names = new Map();
+  if (variableIds.size === 0) return { names, ok: true };
+
+  const resp = await chrome.runtime.sendMessage({ type: 'fetchFigmaVariables', fileKey, token });
+  if (!resp || !resp.ok) return { names, ok: false, error: (resp && resp.error) || 'неизвестная ошибка' };
+
+  const variables = (resp.data && resp.data.meta && resp.data.meta.variables) || {};
+  for (const id of variableIds) {
+    if (variables[id] && variables[id].name) names.set(id, variables[id].name);
+  }
+  return { names, ok: true };
+}
+
+// --- Shared fetch flow -------------------------------------------------------
+
+// Resolves the current Figma selection and fetches its node tree. Used by
+// all three actions (copy text / extract fonts / extract colors) so each
+// always reflects whatever is currently selected in Figma.
+async function fetchSelectedDocument() {
+  const { figmaToken } = await chrome.storage.local.get('figmaToken');
+  if (!figmaToken) {
+    setStatus('Сначала сохрани Personal Access Token.', true);
+    return null;
+  }
+
+  setStatus('Ищу ссылку на выделение...');
+  const source = await resolveSource();
+  if (!source) {
+    setStatus(
+      'Не найден node-id. В Figma выдели слои и нажми Ctrl+Alt+L (Copy link to selection), потом снова нажми кнопку.',
+      true
+    );
+    return null;
+  }
+
+  setStatus('Загружаю данные из Figma API...');
+  const resp = await chrome.runtime.sendMessage({
+    type: 'fetchFigmaNodes',
+    fileKey: source.fileKey,
+    nodeId: source.nodeId,
+    token: figmaToken,
+  });
+
+  if (!resp || !resp.ok) {
+    if (resp && resp.status === 403) {
+      setStatus('Токен недействителен или просрочен. Сгенерируй новый в Figma → Settings → Security.', true);
+    } else {
+      setStatus('Ошибка API: ' + (resp && resp.error), true);
+    }
+    return null;
+  }
+
+  const nodeWrapper = resp.data.nodes && resp.data.nodes[source.nodeId];
+  if (!nodeWrapper || !nodeWrapper.document) {
+    setStatus('Нода не найдена в ответе API — проверь ссылку и токен.', true);
+    return null;
+  }
+
+  return {
+    document: nodeWrapper.document,
+    styles: nodeWrapper.styles || {},
+    fileKey: source.fileKey,
+    token: figmaToken,
+  };
+}
+
 // --- Main flow -------------------------------------------------------------
 
 copyBtn.addEventListener('click', async () => {
@@ -201,51 +372,16 @@ copyBtn.addEventListener('click', async () => {
 // the popup. The button stays as a manual retry, e.g. after fixing the
 // token or re-copying the Figma selection link.
 async function runCopy() {
-  runBtn.disabled = true;
+  allButtons.forEach((b) => (b.disabled = true));
   outputEl.value = '';
   copyBtn.disabled = true;
   try {
-    const { figmaToken } = await chrome.storage.local.get('figmaToken');
-    if (!figmaToken) {
-      setStatus('Сначала сохрани Personal Access Token.', true);
-      return;
-    }
-
-    setStatus('Ищу ссылку на выделение...');
-    const source = await resolveSource();
-    if (!source) {
-      setStatus(
-        'Не найден node-id. В Figma выдели слои и нажми Ctrl+Alt+L (Copy link to selection), потом снова нажми кнопку.',
-        true
-      );
-      return;
-    }
-
-    setStatus('Загружаю данные из Figma API...');
-    const resp = await chrome.runtime.sendMessage({
-      type: 'fetchFigmaNodes',
-      fileKey: source.fileKey,
-      nodeId: source.nodeId,
-      token: figmaToken,
-    });
-
-    if (!resp || !resp.ok) {
-      if (resp && resp.status === 403) {
-        setStatus('Токен недействителен или просрочен. Сгенерируй новый в Figma → Settings → Security.', true);
-      } else {
-        setStatus('Ошибка API: ' + (resp && resp.error), true);
-      }
-      return;
-    }
-
-    const nodeWrapper = resp.data.nodes && resp.data.nodes[source.nodeId];
-    if (!nodeWrapper || !nodeWrapper.document) {
-      setStatus('Нода не найдена в ответе API — проверь ссылку и токен.', true);
-      return;
-    }
+    const result = await fetchSelectedDocument();
+    if (!result) return;
+    const { document } = result;
 
     const texts = [];
-    walk(nodeWrapper.document, nodeWrapper.document.id, texts);
+    walk(document, document.id, texts);
 
     if (texts.length === 0) {
       setStatus('Текстовые слои не найдены в выделении.', true);
@@ -262,10 +398,90 @@ async function runCopy() {
   } catch (err) {
     setStatus('Ошибка: ' + String((err && err.message) || err), true);
   } finally {
-    runBtn.disabled = false;
+    allButtons.forEach((b) => (b.disabled = false));
+  }
+}
+
+async function runExtractFonts() {
+  allButtons.forEach((b) => (b.disabled = true));
+  outputEl.value = '';
+  copyBtn.disabled = true;
+  try {
+    const result = await fetchSelectedDocument();
+    if (!result) return;
+    const { document } = result;
+
+    const nodes = [];
+    collectAllNodes(document, nodes);
+    const fonts = extractFonts(nodes);
+
+    if (fonts.length === 0) {
+      setStatus('Шрифты не найдены в выделении.', true);
+      return;
+    }
+
+    const output = formatFonts(fonts);
+    outputEl.value = output;
+    copyBtn.disabled = false;
+    await navigator.clipboard.writeText(output);
+    setStatus(`Готово: ${fonts.length} уникальных шрифтов. Скопировано в буфер обмена.`);
+  } catch (err) {
+    setStatus('Ошибка: ' + String((err && err.message) || err), true);
+  } finally {
+    allButtons.forEach((b) => (b.disabled = false));
+  }
+}
+
+async function runExtractColors() {
+  allButtons.forEach((b) => (b.disabled = true));
+  outputEl.value = '';
+  copyBtn.disabled = true;
+  try {
+    const result = await fetchSelectedDocument();
+    if (!result) return;
+    const { document, styles, fileKey, token } = result;
+
+    const nodes = [];
+    collectAllNodes(document, nodes);
+    const colors = extractColors(nodes);
+
+    if (colors.length === 0) {
+      setStatus('Цвета не найдены в выделении.', true);
+      return;
+    }
+
+    const variableIds = new Set(colors.filter((c) => c.variableId).map((c) => c.variableId));
+    const { names: variableNames, ok: varOk, error: varError } = await resolveVariableNames(
+      fileKey,
+      token,
+      variableIds
+    );
+    const styledCount = colors.filter((c) => c.styleId).length;
+
+    const output = formatColors(colors, variableNames, styles);
+    outputEl.value = output;
+    copyBtn.disabled = false;
+    await navigator.clipboard.writeText(output);
+
+    let statusMsg = `Готово: ${colors.length} уникальных цветов`;
+    const parts = [];
+    if (styledCount > 0) parts.push(`${styledCount} через стили`);
+    if (variableIds.size > 0) {
+      parts.push(
+        varOk ? `${variableIds.size} через переменные` : `${variableIds.size} через переменные (имена не получены: ${varError})`
+      );
+    }
+    if (parts.length > 0) statusMsg += `, из них ${parts.join(', ')}`;
+    setStatus(statusMsg + '. Скопировано в буфер обмена.');
+  } catch (err) {
+    setStatus('Ошибка: ' + String((err && err.message) || err), true);
+  } finally {
+    allButtons.forEach((b) => (b.disabled = false));
   }
 }
 
 runBtn.addEventListener('click', runCopy);
+fontsBtn.addEventListener('click', runExtractFonts);
+colorsBtn.addEventListener('click', runExtractColors);
 
 init().then(runCopy);

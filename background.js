@@ -20,5 +20,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true; // keep the message channel open for the async response
   }
 
+  if (msg.type === 'fetchFigmaVariables') {
+    figmaFetch(`/v1/files/${encodeURIComponent(msg.fileKey)}/variables/local`, msg.token).then(sendResponse);
+    return true;
+  }
+
   return false;
 });
