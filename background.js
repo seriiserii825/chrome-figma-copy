@@ -63,5 +63,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'listProjects') {
+    runNativeHost({ action: 'list' }).then(async (res) => {
+      if (res.projects) await chrome.storage.local.set({ scssProjects: res.projects });
+      sendResponse(res);
+    });
+    return true;
+  }
+
   return false;
 });

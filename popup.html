@@ -69,6 +69,15 @@
   }
   .conv label { color: #1a1a1a; font-size: 12px; margin-bottom: 6px; }
   .conv label.inline { display: inline-flex; gap: 6px; align-items: center; margin: 6px 0 0; }
+  .proj-current { background: #fff4f0; border: 1px solid #f7c2b0; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
+  .proj-label { font-size: 11px; color: #a4553a; }
+  .proj-name-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; }
+  .proj-name { font-size: 15px; font-weight: 700; color: #1a1a1a; word-break: break-all; }
+  #scssProjectClear { padding: 4px 8px; font-size: 11px; white-space: nowrap; }
+  .proj-list { max-height: 170px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; margin-top: 4px; }
+  .proj-list button { display: block; width: 100%; text-align: left; background: none; color: #1a1a1a; padding: 5px 8px; border-radius: 0; }
+  .proj-list button.active { background: #fde9e3; }
+  .proj-list button.current { font-weight: 600; }
   .hint {
     font-size: 11px;
     color: #999;
@@ -94,9 +103,15 @@
 
   <div class="field conv">
     <label><input type="checkbox" id="scssEnabled" /> Конвертировать при копировании (<code>c t</code> / <code>c l</code> / <code>c s</code>)</label>
-    <div class="row">
-      <input type="text" id="scssProject" placeholder="имя проекта, например ag-axel" autocomplete="off" />
+    <div id="scssProjectCurrent" class="proj-current">
+      <div class="proj-label">Проект для замен</div>
+      <div class="proj-name-row">
+        <span id="scssProjectName" class="proj-name"></span>
+        <button id="scssProjectClear" class="secondary" type="button">Без проекта</button>
+      </div>
     </div>
+    <input type="text" id="scssProjectSearch" placeholder="Поиск проекта, например serra idea" autocomplete="off" />
+    <div id="scssProjectList" class="proj-list" hidden></div>
     <label class="inline"><input type="checkbox" id="scssToRem" /> px → rem (<code>--to-rem</code>)</label>
   </div>
 

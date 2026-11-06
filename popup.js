@@ -487,20 +487,118 @@ colorsBtn.addEventListener('click', runExtractColors);
 // --- go-scss settings (copy shortcuts) ------------------------------------
 
 const scssEnabledEl = document.getElementById('scssEnabled');
-const scssProjectEl = document.getElementById('scssProject');
 const scssToRemEl = document.getElementById('scssToRem');
+const projSearch = document.getElementById('scssProjectSearch');
+const projList = document.getElementById('scssProjectList');
+
+let allProjects = [];
+let selectedProject = '';
+let items = []; // [{ name, label }] — первый элемент «без проекта»
+let activeIndex = 0;
+
+function filterProjects(query) {
+  const tokens = query.toLowerCase().split(/[\s_-]+/).filter(Boolean);
+  if (!tokens.length) return allProjects;
+  return allProjects.filter((name) => {
+    const hay = name.toLowerCase();
+    return tokens.every((t) => hay.includes(t));
+  });
+}
+
+const projName = document.getElementById('scssProjectName');
+const projClear = document.getElementById('scssProjectClear');
+
+function showCurrent() {
+  projName.textContent = selectedProject || 'не выбран — замены не применяются';
+  projName.style.color = selectedProject ? '#1a1a1a' : '#888';
+  projName.style.fontWeight = selectedProject ? '700' : '400';
+  projClear.disabled = !selectedProject;
+  projSearch.placeholder = selectedProject
+    ? `Сменить проект (сейчас ${selectedProject})`
+    : 'Поиск проекта, например serra idea';
+}
+
+projClear.addEventListener('click', () => chooseProject(''));
+
+async function chooseProject(name) {
+  selectedProject = name;
+  await chrome.storage.local.set({ scssProject: name });
+  projSearch.value = '';
+  projList.hidden = true;
+  showCurrent();
+  projSearch.blur();
+}
+
+function renderList() {
+  const matches = filterProjects(projSearch.value);
+  items = [{ name: '', label: '— без проекта —' }, ...matches.map((n) => ({ name: n, label: n }))];
+  activeIndex = Math.min(activeIndex, items.length - 1);
+  projList.innerHTML = '';
+  items.forEach((item, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = item.label;
+    if (item.name === selectedProject) btn.classList.add('current');
+    if (i === activeIndex) btn.classList.add('active');
+    // mousedown + preventDefault: клик не уводит фокус из поля раньше времени.
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      chooseProject(item.name);
+    });
+    projList.append(btn);
+  });
+  projList.hidden = false;
+}
+
+projSearch.addEventListener('focus', () => {
+  activeIndex = 0;
+  renderList();
+});
+projSearch.addEventListener('input', () => {
+  activeIndex = 0;
+  renderList();
+});
+projSearch.addEventListener('blur', () => {
+  projList.hidden = true;
+});
+projSearch.addEventListener('keydown', (e) => {
+  if (projList.hidden) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const step = e.key === 'ArrowDown' ? 1 : -1;
+    activeIndex = (activeIndex + step + items.length) % items.length;
+    renderList();
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (items[activeIndex]) chooseProject(items[activeIndex].name);
+  } else if (e.key === 'Escape') {
+    projSearch.blur();
+  }
+});
+
+async function loadProjects() {
+  const { scssProjects = [] } = await chrome.storage.local.get('scssProjects');
+  allProjects = scssProjects;
+  const res = await chrome.runtime.sendMessage({ type: 'listProjects' }).catch((err) => ({ error: String(err) }));
+  if (res && res.projects) {
+    allProjects = res.projects;
+  } else if (res && res.error && !allProjects.length) {
+    setStatus(`go-scss: ${res.error}`, true);
+  }
+}
 
 async function loadScssSettings() {
   const { scssEnabled = false, scssProject = '', scssToRem = false } =
     await chrome.storage.local.get(['scssEnabled', 'scssProject', 'scssToRem']);
   scssEnabledEl.checked = scssEnabled;
-  scssProjectEl.value = scssProject;
   scssToRemEl.checked = scssToRem;
+  selectedProject = scssProject;
+  showCurrent();
+  loadProjects();
 }
 
 scssEnabledEl.addEventListener('change', () => chrome.storage.local.set({ scssEnabled: scssEnabledEl.checked }));
 scssToRemEl.addEventListener('change', () => chrome.storage.local.set({ scssToRem: scssToRemEl.checked }));
-scssProjectEl.addEventListener('change', () => chrome.storage.local.set({ scssProject: scssProjectEl.value.trim() }));
 
 loadScssSettings();
 
