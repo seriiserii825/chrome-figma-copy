@@ -484,4 +484,24 @@ runBtn.addEventListener('click', runCopy);
 fontsBtn.addEventListener('click', runExtractFonts);
 colorsBtn.addEventListener('click', runExtractColors);
 
+// --- go-scss settings (copy shortcuts) ------------------------------------
+
+const scssEnabledEl = document.getElementById('scssEnabled');
+const scssProjectEl = document.getElementById('scssProject');
+const scssToRemEl = document.getElementById('scssToRem');
+
+async function loadScssSettings() {
+  const { scssEnabled = false, scssProject = '', scssToRem = false } =
+    await chrome.storage.local.get(['scssEnabled', 'scssProject', 'scssToRem']);
+  scssEnabledEl.checked = scssEnabled;
+  scssProjectEl.value = scssProject;
+  scssToRemEl.checked = scssToRem;
+}
+
+scssEnabledEl.addEventListener('change', () => chrome.storage.local.set({ scssEnabled: scssEnabledEl.checked }));
+scssToRemEl.addEventListener('change', () => chrome.storage.local.set({ scssToRem: scssToRemEl.checked }));
+scssProjectEl.addEventListener('change', () => chrome.storage.local.set({ scssProject: scssProjectEl.value.trim() }));
+
+loadScssSettings();
+
 init().then(runCopy);

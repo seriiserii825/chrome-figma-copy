@@ -46,3 +46,21 @@ FIGMA_TOKEN=your-figma-personal-access-token
    once.
 5. Paste it into `.env` as `FIGMA_TOKEN=...` (or into the popup's token
    field).
+
+## Конвертация go-scss при копировании
+
+`c t`, `c l`, `c s` могут сразу класть CSS, приведённый к виду проекта
+(переменные из `~/Documents/go/go-scss/projects/<проект>.txt`, em/rem,
+порядок свойств). Отдельный процесс не нужен: Chrome запускает
+`go-scss-host` только на момент копирования.
+
+Один раз:
+
+1. `cd ~/Documents/go/go-scss && go build -o ~/go/bin/go-scss-host ./cmd/go-scss-host`
+2. Загрузи расширение, скопируй его ID из `chrome://extensions`.
+3. `native-host/install.sh <ID>` — регистрирует хост в Chrome/Chromium.
+4. В popup включи «Конвертировать при копировании», укажи имя проекта
+   (имя папки проекта), при необходимости включи px → rem.
+
+Popup-кнопка «Скопировать в порядке страницы» конвертацию не применяет:
+там не CSS.

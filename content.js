@@ -18,6 +18,38 @@
 
   let pendingTimer = null;
 
+  // Конвертация go-scss при копировании по шорткатам. Включается в popup.
+  // Флаг читается из storage один раз и обновляется по изменениям.
+  let conversionEnabled = false;
+  chrome.storage.local.get('scssEnabled').then(({ scssEnabled }) => {
+    conversionEnabled = !!scssEnabled;
+  }).catch(() => {});
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && 'scssEnabled' in changes) conversionEnabled = !!changes.scssEnabled.newValue;
+  });
+
+  // Взводит figma-clipboard-main.js: следующий writeText пойдёт через go-scss.
+  // Флаг через атрибут DOM, а не сообщение: клик ниже вызывает writeText синхронно.
+  function armConversion() {
+    if (!conversionEnabled) return;
+    document.documentElement.dataset.figmaCopyArmedUntil = String(Date.now() + 3000);
+  }
+
+  // Ответ из MAIN-world: передаём запрос в фон (go-scss-host) и возвращаем результат.
+  window.addEventListener('message', async (event) => {
+    if (event.source !== window || event.data?.source !== 'figma-copy-main') return;
+    if (event.data.type !== 'convert') return;
+    const { id, text } = event.data;
+    let reply;
+    try {
+      reply = await chrome.runtime.sendMessage({ type: 'convertCss', text });
+    } catch (err) {
+      reply = { error: String((err && err.message) || err) };
+    }
+    if (reply && reply.error) showToast(`go-scss: ${reply.error}`);
+    window.postMessage({ source: 'figma-copy-iso', type: 'converted', id, output: reply && reply.output, error: reply && reply.error }, '*');
+  });
+
   const isDevMode = () => new URLSearchParams(location.search).get('m') === 'dev';
 
   // Figma keeps focus on a hidden `input.focus-target` while the canvas is
@@ -61,6 +93,7 @@
   function copyNamedBlock(name) {
     const button = document.querySelector(`button[aria-label^="Copy ${name}"]`);
     if (button) {
+      armConversion();
       button.click();
       return;
     }
@@ -81,6 +114,7 @@
     const heading = [...document.querySelectorAll('h3')].find((h) => QUOTED_TITLE.test(h.textContent.trim()));
     const button = heading && copyButtonOf(heading);
     if (button) {
+      armConversion();
       button.click();
       return;
     }

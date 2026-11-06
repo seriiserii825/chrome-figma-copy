@@ -11,6 +11,39 @@ async function figmaFetch(path, token) {
   }
 }
 
+// Конвертация CSS через go-scss-host (Native Messaging). Chrome запускает
+// хост на каждый запрос и сразу закрывает порт: фонового процесса нет.
+const NATIVE_HOST = 'com.gaba.go_scss';
+
+function runNativeHost(payload) {
+  return new Promise((resolve) => {
+    let port;
+    try {
+      port = chrome.runtime.connectNative(NATIVE_HOST);
+    } catch (err) {
+      resolve({ error: String((err && err.message) || err) });
+      return;
+    }
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      try { port.disconnect(); } catch { /* уже отключён */ }
+      resolve(result);
+    };
+    port.onMessage.addListener((msg) => finish(msg));
+    port.onDisconnect.addListener(() =>
+      finish({ error: (chrome.runtime.lastError && chrome.runtime.lastError.message) || 'go-scss-host не отвечает' })
+    );
+    port.postMessage(payload);
+  });
+}
+
+async function convertCss(text) {
+  const { scssProject = '', scssToRem = false } = await chrome.storage.local.get(['scssProject', 'scssToRem']);
+  return runNativeHost({ text, project: scssProject, toRem: scssToRem });
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'fetchFigmaNodes') {
     figmaFetch(
@@ -22,6 +55,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'fetchFigmaVariables') {
     figmaFetch(`/v1/files/${encodeURIComponent(msg.fileKey)}/variables/local`, msg.token).then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === 'convertCss') {
+    convertCss(msg.text).then(sendResponse);
     return true;
   }
 

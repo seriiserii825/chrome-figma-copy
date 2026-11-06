@@ -67,6 +67,8 @@
     font: 12px/1.4 ui-monospace, monospace;
     resize: vertical;
   }
+  .conv label { color: #1a1a1a; font-size: 12px; margin-bottom: 6px; }
+  .conv label.inline { display: inline-flex; gap: 6px; align-items: center; margin: 6px 0 0; }
   .hint {
     font-size: 11px;
     color: #999;
@@ -88,6 +90,14 @@
       <input type="password" id="tokenInput" placeholder="figd_..." autocomplete="off" />
       <button id="saveTokenBtn" class="secondary">Сохранить</button>
     </div>
+  </div>
+
+  <div class="field conv">
+    <label><input type="checkbox" id="scssEnabled" /> Конвертировать при копировании (<code>c t</code> / <code>c l</code> / <code>c s</code>)</label>
+    <div class="row">
+      <input type="text" id="scssProject" placeholder="имя проекта, например ag-axel" autocomplete="off" />
+    </div>
+    <label class="inline"><input type="checkbox" id="scssToRem" /> px → rem (<code>--to-rem</code>)</label>
   </div>
 
   <button id="runBtn">Скопировать в порядке страницы</button>
