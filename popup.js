@@ -487,6 +487,7 @@ colorsBtn.addEventListener('click', runExtractColors);
 // --- go-scss settings (copy shortcuts) ------------------------------------
 
 const scssEnabledEl = document.getElementById('scssEnabled');
+const scssOnButtonEl = document.getElementById('scssOnButton');
 const scssToRemEl = document.getElementById('scssToRem');
 const projSearch = document.getElementById('scssProjectSearch');
 const projList = document.getElementById('scssProjectList');
@@ -588,9 +589,10 @@ async function loadProjects() {
 }
 
 async function loadScssSettings() {
-  const { scssEnabled = false, scssProject = '', scssToRem = false } =
-    await chrome.storage.local.get(['scssEnabled', 'scssProject', 'scssToRem']);
+  const { scssEnabled = false, scssOnButton = false, scssProject = '', scssToRem = false } =
+    await chrome.storage.local.get(['scssEnabled', 'scssOnButton', 'scssProject', 'scssToRem']);
   scssEnabledEl.checked = scssEnabled;
+  scssOnButtonEl.checked = scssOnButton;
   scssToRemEl.checked = scssToRem;
   selectedProject = scssProject;
   showCurrent();
@@ -598,6 +600,7 @@ async function loadScssSettings() {
 }
 
 scssEnabledEl.addEventListener('change', () => chrome.storage.local.set({ scssEnabled: scssEnabledEl.checked }));
+scssOnButtonEl.addEventListener('change', () => chrome.storage.local.set({ scssOnButton: scssOnButtonEl.checked }));
 scssToRemEl.addEventListener('change', () => chrome.storage.local.set({ scssToRem: scssToRemEl.checked }));
 
 loadScssSettings();

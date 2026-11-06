@@ -20,20 +20,34 @@
 
   // Конвертация go-scss при копировании по шорткатам. Включается в popup.
   // Флаг читается из storage один раз и обновляется по изменениям.
+  // scssEnabled — сочетания c t / c l / c s; scssOnButton — иконка копирования.
   let conversionEnabled = false;
-  chrome.storage.local.get('scssEnabled').then(({ scssEnabled }) => {
+  let buttonConversionEnabled = false;
+  chrome.storage.local.get(['scssEnabled', 'scssOnButton']).then(({ scssEnabled, scssOnButton }) => {
     conversionEnabled = !!scssEnabled;
+    buttonConversionEnabled = !!scssOnButton;
   }).catch(() => {});
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && 'scssEnabled' in changes) conversionEnabled = !!changes.scssEnabled.newValue;
+    if (area !== 'local') return;
+    if ('scssEnabled' in changes) conversionEnabled = !!changes.scssEnabled.newValue;
+    if ('scssOnButton' in changes) buttonConversionEnabled = !!changes.scssOnButton.newValue;
   });
 
   // Взводит figma-clipboard-main.js: следующий writeText пойдёт через go-scss.
   // Флаг через атрибут DOM, а не сообщение: клик ниже вызывает writeText синхронно.
-  function armConversion() {
-    if (!conversionEnabled) return;
+  function armConversion(fromButton = false) {
+    if (!fromButton && !conversionEnabled) return;
     document.documentElement.dataset.figmaCopyArmedUntil = String(Date.now() + 3000);
   }
+
+  // Клик по иконке копирования Figma (Layout / Typography / Style и т.д.).
+  // Взводим до того, как обработчик Figma вызовет writeText. Capture-фаза
+  // нужна, чтобы успеть раньше обработчиков самой Figma.
+  document.addEventListener('click', (event) => {
+    if (!buttonConversionEnabled) return;
+    const button = event.target.closest?.('button[aria-label^="Copy"]');
+    if (button) armConversion(true);
+  }, true);
 
   // Ответ из MAIN-world: передаём запрос в фон (go-scss-host) и возвращаем результат.
   window.addEventListener('message', async (event) => {
