@@ -23,7 +23,30 @@ this extension rather than trusting API/paste order.
 
 ## Architecture
 
-No content script at all — everything happens in the popup + a service worker.
+The popup + service worker handle everything that goes through the REST API.
+A small content script covers the `c` `t` / `c` `l` / `c` `s` shortcuts, which don't use the API.
+
+### Content script (`content.js`)
+Sequence `c` then `t` (no modifier) copies the selected layer's Typography
+block in Dev Mode. It clicks Figma's own copy button
+(`button[aria-label^="Copy Typography"]`), so the result is identical to the
+panel and needs no token. That selector relies on Figma's aria-label.
+
+Sequence `c` then `l` copies the second block of a mixed-style text. That block
+is titled with a quoted preview (`"Scopri le ..."`), so it's found as the first
+`h3` starting with a quote, and only that block: a third style isn't reachable.
+
+Sequence `c` then `s` copies the Style block, the same way as Typography
+(`button[aria-label^="Copy Style"]`).
+
+- Chrome `commands` require a modifier, hence a capture-phase `keydown`
+  listener instead.
+- `c` is Figma's comment tool, so it's held back for 500 ms. If no second key
+  follows, the tool is activated by clicking the `Comment` toolbar button.
+- Active only with `m=dev` in the URL: in Design mode, typing on the canvas
+  also goes through hidden `input.focus-target`, so any word with "ct" would
+  fire the shortcut.
+- Matches `event.code`, so it works on the Russian layout too.
 
 ### Popup (`popup.html` + `popup.js`)
 - Personal Access Token is entered once and stored in `chrome.storage.local`.

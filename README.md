@@ -14,6 +14,14 @@ architecture writeup.
    - via a bundled `.env` file in the project root (auto-loaded on popup
      open, takes precedence over the manually saved token).
 
+## Hotkeys
+
+- `Alt+C` — open the popup and copy text in page order.
+- `c` then `t` — in Dev Mode, copy the selected layer's Typography CSS, same
+  as the copy icon in the right panel. No token needed.
+- `c` then `l` — same, for the second block of a mixed-style text.
+- `c` then `s` — same, for the Style block (border, radius, background).
+
 ## `.env`
 
 ```
